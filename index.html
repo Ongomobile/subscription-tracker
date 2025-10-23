@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Subscription Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .notification-badge {
+        animation: slideIn 0.3s ease-out;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+      <!-- Header -->
+      <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Subscription Tracker</h1>
+            <p class="text-gray-600">Manage your subscriptions and never miss a renewal</p>
+          </div>
+          <div class="mt-4 md:mt-0">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p class="text-sm text-gray-600">Total Monthly Cost</p>
+              <p
+                class="text-2xl font-bold text-blue-600"
+                id="totalCost"
+              >
+                $0.00
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications Alert -->
+      <div
+        id="notificationArea"
+        class="mb-6"
+      ></div>
+
+      <!-- Action Buttons -->
+      <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex flex-wrap gap-3">
+          <button
+            onclick="showAddModal()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition"
+          >
+            + Add Subscription
+          </button>
+          <button
+            onclick="importCSV()"
+            class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition"
+          >
+            Import CSV
+          </button>
+          <button
+            onclick="exportCSV()"
+            class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition"
+          >
+            Export CSV
+          </button>
+          <button
+            onclick="exportToGoogleCalendar()"
+            class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition"
+          >
+            📅 Export to Google Calendar
+          </button>
+          <input
+            type="file"
+            id="csvFileInput"
+            accept=".csv"
+            class="hidden"
+            onchange="handleCSVUpload(event)"
+          />
+        </div>
+      </div>
+
+      <!-- Subscriptions List -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Your Subscriptions</h2>
+        <div
+          id="subscriptionsList"
+          class="space-y-3"
+        >
+          <!-- Subscriptions will be inserted here -->
+        </div>
+        <div
+          id="emptyState"
+          class="text-center py-12 hidden"
+        >
+          <svg
+            class="mx-auto h-12 w-12 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+            ></path>
+          </svg>
+          <p class="mt-2 text-gray-600">No subscriptions yet. Add your first one!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div
+      id="modal"
+      class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+    >
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3
+          id="modalTitle"
+          class="text-2xl font-bold text-gray-800 mb-4"
+        >
+          Add Subscription
+        </h3>
+        <form
+          id="subscriptionForm"
+          onsubmit="saveSubscription(event)"
+        >
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+              <input
+                type="text"
+                id="company"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Price ($) *</label>
+              <input
+                type="number"
+                id="price"
+                step="0.01"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Renewal Date *</label>
+              <input
+                type="date"
+                id="renewalDate"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Billing Frequency</label>
+              <select
+                id="frequency"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="Monthly">Monthly</option>
+                <option value="Annual">Annual</option>
+                <option value="Quarterly">Quarterly</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+              <select
+                id="paymentMethod"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select method</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Debit Card">Debit Card</option>
+                <option value="PayPal">PayPal</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button
+              type="submit"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onclick="closeModal()"
+              class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg font-medium transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let subscriptions = [];
+      let editingIndex = -1;
+
+      // Initialize app
+      function init() {
+        loadSubscriptions();
+        renderSubscriptions();
+        updateTotalCost();
+        checkNotifications();
+      }
+
+      // Load subscriptions from localStorage
+      function loadSubscriptions() {
+        const saved = localStorage.getItem('subscriptions');
+        if (saved) {
+          subscriptions = JSON.parse(saved);
+        }
+      }
+
+      // Save subscriptions to localStorage
+      function saveToStorage() {
+        localStorage.setItem('subscriptions', JSON.stringify(subscriptions));
+      }
+
+      // Show add modal
+      function showAddModal() {
+        editingIndex = -1;
+        document.getElementById('modalTitle').textContent = 'Add Subscription';
+        document.getElementById('subscriptionForm').reset();
+        document.getElementById('modal').classList.remove('hidden');
+      }
+
+      // Show edit modal
+      function showEditModal(index) {
+        editingIndex = index;
+        const sub = subscriptions[index];
+        document.getElementById('modalTitle').textContent = 'Edit Subscription';
+        document.getElementById('company').value = sub.company;
+        document.getElementById('price').value = sub.price;
+        document.getElementById('renewalDate').value = sub.renewalDate;
+        document.getElementById('frequency').value = sub.frequency || 'Monthly';
+        document.getElementById('paymentMethod').value = sub.paymentMethod || '';
+        document.getElementById('modal').classList.remove('hidden');
+      }
+
+      // Close modal
+      function closeModal() {
+        document.getElementById('modal').classList.add('hidden');
+        document.getElementById('subscriptionForm').reset();
+        editingIndex = -1;
+      }
+
+      // Save subscription
+      function saveSubscription(event) {
+        event.preventDefault();
+
+        const subscription = {
+          company: document.getElementById('company').value,
+          price: parseFloat(document.getElementById('price').value),
+          renewalDate: document.getElementById('renewalDate').value,
+          frequency: document.getElementById('frequency').value,
+          paymentMethod: document.getElementById('paymentMethod').value,
+        };
+
+        if (editingIndex >= 0) {
+          subscriptions[editingIndex] = subscription;
+        } else {
+          subscriptions.push(subscription);
+        }
+
+        saveToStorage();
+        renderSubscriptions();
+        updateTotalCost();
+        checkNotifications();
+        closeModal();
+      }
+
+      // Delete subscription
+      function deleteSubscription(index) {
+        if (confirm('Are you sure you want to delete this subscription?')) {
+          subscriptions.splice(index, 1);
+          saveToStorage();
+          renderSubscriptions();
+          updateTotalCost();
+          checkNotifications();
+        }
+      }
+
+      // Calculate days until renewal
+      function getDaysUntilRenewal(renewalDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const renewal = new Date(renewalDate);
+        renewal.setHours(0, 0, 0, 0);
+        const diffTime = renewal - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays;
+      }
+
+      // Get status color based on days until renewal
+      function getStatusColor(days) {
+        if (days < 0) return 'bg-gray-100 border-gray-300';
+        if (days <= 3) return 'bg-red-50 border-red-300';
+        if (days <= 7) return 'bg-yellow-50 border-yellow-300';
+        return 'bg-green-50 border-green-300';
+      }
+
+      // Get badge color
+      function getBadgeColor(days) {
+        if (days < 0) return 'bg-gray-500';
+        if (days <= 3) return 'bg-red-500';
+        if (days <= 7) return 'bg-yellow-500';
+        return 'bg-green-500';
+      }
+
+      // Format date for display
+      function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+
+      // Render subscriptions
+      function renderSubscriptions() {
+        const container = document.getElementById('subscriptionsList');
+        const emptyState = document.getElementById('emptyState');
+
+        if (subscriptions.length === 0) {
+          container.innerHTML = '';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+
+        emptyState.classList.add('hidden');
+
+        // Sort by renewal date
+        const sorted = [...subscriptions].sort((a, b) => new Date(a.renewalDate) - new Date(b.renewalDate));
+
+        container.innerHTML = sorted
+          .map((sub, originalIndex) => {
+            const actualIndex = subscriptions.indexOf(sub);
+            const daysUntil = getDaysUntilRenewal(sub.renewalDate);
+            const statusColor = getStatusColor(daysUntil);
+            const badgeColor = getBadgeColor(daysUntil);
+
+            let daysText = '';
+            if (daysUntil < 0) {
+              daysText = 'Expired';
+            } else if (daysUntil === 0) {
+              daysText = 'Today!';
+            } else if (daysUntil === 1) {
+              daysText = 'Tomorrow';
+            } else {
+              daysText = `${daysUntil} days`;
+            }
+
+            return `
+                    <div class="border-2 ${statusColor} rounded-lg p-4 hover:shadow-md transition">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <h3 class="text-lg font-semibold text-gray-800">${sub.company}</h3>
+                                    <span class="${badgeColor} text-white text-xs px-2 py-1 rounded-full">${daysText}</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                                    <div><span class="font-medium">Price:</span> $${sub.price.toFixed(2)}</div>
+                                    <div><span class="font-medium">Renewal:</span> ${formatDate(sub.renewalDate)}</div>
+                                    <div><span class="font-medium">Frequency:</span> ${sub.frequency || 'Monthly'}</div>
+                                    <div><span class="font-medium">Payment:</span> ${sub.paymentMethod || 'N/A'}</div>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 ml-4">
+                                <button onclick="showEditModal(${actualIndex})" class="text-blue-600 hover:text-blue-800 p-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </button>
+                                <button onclick="deleteSubscription(${actualIndex})" class="text-red-600 hover:text-red-800 p-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+          })
+          .join('');
+      }
+
+      // Update total cost
+      function updateTotalCost() {
+        const monthlyTotal = subscriptions.reduce((total, sub) => {
+          let monthlyPrice = sub.price;
+          if (sub.frequency === 'Annual') {
+            monthlyPrice = sub.price / 12;
+          } else if (sub.frequency === 'Quarterly') {
+            monthlyPrice = sub.price / 3;
+          }
+          return total + monthlyPrice;
+        }, 0);
+        document.getElementById('totalCost').textContent = `$${monthlyTotal.toFixed(2)}`;
+      }
+
+      // Check for upcoming renewals
+      function checkNotifications() {
+        const notificationArea = document.getElementById('notificationArea');
+        const expiringSoon = subscriptions.filter((sub) => {
+          const days = getDaysUntilRenewal(sub.renewalDate);
+          return days >= 0 && days <= 3;
+        });
+
+        if (expiringSoon.length === 0) {
+          notificationArea.innerHTML = '';
+          return;
+        }
+
+        const notifications = expiringSoon
+          .map((sub) => {
+            const days = getDaysUntilRenewal(sub.renewalDate);
+            let message = '';
+            if (days === 0) {
+              message = `<strong>${sub.company}</strong> renews today!`;
+            } else if (days === 1) {
+              message = `<strong>${sub.company}</strong> renews tomorrow!`;
+            } else {
+              message = `<strong>${sub.company}</strong> renews in ${days} days`;
+            }
+            return message;
+          })
+          .join('</li><li>');
+
+        notificationArea.innerHTML = `
+                <div class="notification-badge bg-orange-100 border-l-4 border-orange-500 rounded-lg p-4">
+                    <div class="flex items-start">
+                        <svg class="w-6 h-6 text-orange-500 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <div class="flex-1">
+                            <h4 class="font-bold text-orange-800 mb-1">Upcoming Renewals</h4>
+                            <ul class="text-sm text-orange-700 space-y-1">
+                                <li>${notifications}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      // Import CSV
+      function importCSV() {
+        document.getElementById('csvFileInput').click();
+      }
+
+      // Handle CSV upload
+      function handleCSVUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const text = e.target.result;
+          const lines = text.split('\n').filter((line) => line.trim());
+
+          // Skip header and empty lines
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split(',').map((p) => p.trim());
+            if (parts[0] && parts[1] && parts[2]) {
+              // Convert "Nov 13" format to full date (current year)
+              let renewalDate = parts[2];
+              if (!renewalDate.includes('-') && !renewalDate.includes('/')) {
+                const currentYear = new Date().getFullYear();
+                const date = new Date(`${parts[2]} ${currentYear}`);
+                renewalDate = date.toISOString().split('T')[0];
+              }
+
+              subscriptions.push({
+                company: parts[0],
+                price: parseFloat(parts[1]),
+                renewalDate: renewalDate,
+                frequency: 'Monthly',
+                paymentMethod: '',
+              });
+            }
+          }
+
+          saveToStorage();
+          renderSubscriptions();
+          updateTotalCost();
+          checkNotifications();
+          alert('CSV imported successfully!');
+        };
+        reader.readAsText(file);
+      }
+
+      // Export CSV
+      function exportCSV() {
+        if (subscriptions.length === 0) {
+          alert('No subscriptions to export!');
+          return;
+        }
+
+        let csv = 'Company,Price,Renewal Date,Frequency,Payment Method\n';
+        subscriptions.forEach((sub) => {
+          csv += `${sub.company},${sub.price},${sub.renewalDate},${sub.frequency || 'Monthly'},${
+            sub.paymentMethod || ''
+          }\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'subscriptions.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+
+      // Export to Google Calendar (iCal format)
+      function exportToGoogleCalendar() {
+        if (subscriptions.length === 0) {
+          alert('No subscriptions to export!');
+          return;
+        }
+
+        // Create iCal file content
+        let icsContent = 'BEGIN:VCALENDAR\n';
+        icsContent += 'VERSION:2.0\n';
+        icsContent += 'PRODID:-//Subscription Tracker//EN\n';
+        icsContent += 'CALSCALE:GREGORIAN\n';
+        icsContent += 'METHOD:PUBLISH\n';
+        icsContent += 'X-WR-CALNAME:Subscription Renewals\n';
+        icsContent += 'X-WR-TIMEZONE:UTC\n';
+
+        subscriptions.forEach((sub, index) => {
+          const renewalDate = new Date(sub.renewalDate);
+          const eventDate = formatDateForICal(renewalDate);
+          const uid = `subscription-${index}-${Date.now()}@subscriptiontracker.com`;
+
+          // Determine recurrence rule based on frequency
+          let rrule = '';
+          if (sub.frequency === 'Monthly') {
+            rrule = 'RRULE:FREQ=MONTHLY;COUNT=24\n'; // 2 years of reminders
+          } else if (sub.frequency === 'Annual') {
+            rrule = 'RRULE:FREQ=YEARLY;COUNT=5\n'; // 5 years of reminders
+          } else if (sub.frequency === 'Quarterly') {
+            rrule = 'RRULE:FREQ=MONTHLY;INTERVAL=3;COUNT=16\n'; // ~4 years of reminders
+          }
+
+          // Create event
+          icsContent += 'BEGIN:VEVENT\n';
+          icsContent += `UID:${uid}\n`;
+          icsContent += `DTSTAMP:${formatDateForICal(new Date())}\n`;
+          icsContent += `DTSTART;VALUE=DATE:${eventDate}\n`;
+          icsContent += `SUMMARY:💳 ${sub.company} Subscription Renewal ($${sub.price})\n`;
+          icsContent += `DESCRIPTION:Subscription: ${sub.company}\\nAmount: $${sub.price}\\nFrequency: ${sub.frequency}\\n`;
+          if (sub.paymentMethod) {
+            icsContent += `Payment Method: ${sub.paymentMethod}\\n`;
+          }
+          icsContent += `\\nRemember to review or cancel before renewal!\n`;
+          icsContent += 'STATUS:CONFIRMED\n';
+          icsContent += 'TRANSP:TRANSPARENT\n';
+
+          // Add 3-day reminder (4320 minutes = 3 days)
+          icsContent += 'BEGIN:VALARM\n';
+          icsContent += 'TRIGGER:-P3D\n';
+          icsContent += 'ACTION:DISPLAY\n';
+          icsContent += `DESCRIPTION:${sub.company} subscription renews in 3 days! ($${sub.price})\n`;
+          icsContent += 'END:VALARM\n';
+
+          // Add 1-day reminder as well
+          icsContent += 'BEGIN:VALARM\n';
+          icsContent += 'TRIGGER:-P1D\n';
+          icsContent += 'ACTION:DISPLAY\n';
+          icsContent += `DESCRIPTION:${sub.company} subscription renews tomorrow! ($${sub.price})\n`;
+          icsContent += 'END:VALARM\n';
+
+          if (rrule) {
+            icsContent += rrule;
+          }
+          icsContent += 'END:VEVENT\n';
+        });
+
+        icsContent += 'END:VCALENDAR';
+
+        // Create and download the .ics file
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'subscription-renewals.ics';
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+        // Show instructions
+        setTimeout(() => {
+          alert(
+            'Calendar file downloaded!\n\nNext steps:\n1. Open the downloaded .ics file\n2. It will open in your calendar app (Google Calendar, Outlook, Apple Calendar)\n3. Click "Add to Calendar" or "Import"\n4. Your subscriptions will appear as recurring events with 3-day and 1-day reminders!\n\nNote: If importing to Google Calendar via web, go to Settings > Import & Export > Import'
+          );
+        }, 500);
+      }
+
+      // Format date for iCal format (YYYYMMDD)
+      function formatDateForICal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+      }
+
+      // Initialize on page load
+      init();
+    </script>
+  </body>
+</html>
