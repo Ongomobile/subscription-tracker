@@ -547,16 +547,6 @@
           `DESCRIPTION:${desc}`,
           'STATUS:CONFIRMED',
           'TRANSP:TRANSPARENT',
-          'BEGIN:VALARM',
-          'TRIGGER:-P3D',
-          'ACTION:DISPLAY',
-          `DESCRIPTION:${sub.company} subscription renews in 3 days! ($${sub.price})`,
-          'END:VALARM',
-          'BEGIN:VALARM',
-          'TRIGGER:-P1D',
-          'ACTION:DISPLAY',
-          `DESCRIPTION:${sub.company} subscription renews tomorrow! ($${sub.price})`,
-          'END:VALARM',
         ];
 
         if (rruleMap[sub.frequency]) lines.push(rruleMap[sub.frequency]);
@@ -587,7 +577,7 @@
 
         setTimeout(() => {
           alert(
-            'Calendar file downloaded!\n\nNext steps:\n1. Open the downloaded .ics file\n2. It will open in your calendar app (Google Calendar, Outlook, Apple Calendar)\n3. Click "Add to Calendar" or "Import"\n4. Your subscriptions will appear as recurring events with 3-day and 1-day reminders!\n\nNote: If importing to Google Calendar via web, go to Settings > Import & Export > Import'
+            'Calendar file downloaded!\n\nNext steps:\n1. Open the downloaded .ics file\n2. It will open in your calendar app (Google Calendar, Outlook, Apple Calendar)\n3. Click "Add to Calendar" or "Import"\n4. Your subscriptions will appear as recurring events on their renewal dates\n5. Set your own reminders directly in your calendar app\n\nNote: If importing to Google Calendar via web, go to Settings > Import & Export > Import'
           );
         }, 500);
       }
