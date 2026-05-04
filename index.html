@@ -23,10 +23,22 @@
             <h1 class="text-3xl font-bold text-gray-800 mb-2">Subscription Tracker</h1>
             <p class="text-gray-600">Manage your subscriptions and never miss a renewal</p>
           </div>
-          <div class="mt-4 md:mt-0">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 min-w-[140px]">
               <p class="text-sm text-gray-600">Total Monthly Cost</p>
               <p class="text-2xl font-bold text-blue-600" id="totalCost">$0.00</p>
+            </div>
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 min-w-[140px]">
+              <p class="text-sm text-gray-600">Next Annual Renewal</p>
+              <p class="text-2xl font-bold text-purple-600" id="nextAnnualDays">—</p>
+            </div>
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4 min-w-[140px]">
+              <p class="text-sm text-gray-600">Annual Subs / Month</p>
+              <p class="text-2xl font-bold text-green-600" id="annualMonthlyPaid">$0.00</p>
+            </div>
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 min-w-[140px]">
+              <p class="text-sm text-gray-600">Monthly Subs Total</p>
+              <p class="text-2xl font-bold text-orange-600" id="monthlyOnlyTotal">$0.00</p>
             </div>
           </div>
         </div>
@@ -134,11 +146,38 @@
       let subscriptions = [];
       let editingIndex = -1;
 
+      // --- Seed data (used when localStorage is empty) ---
+
+      const SEED_SUBSCRIPTIONS = [
+        { company: 'Loom Atlassian',              price: 24,     renewalDate: '2026-05-20', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: 'I need to start using more' },
+        { company: 'Google Fi',                   price: 38.43,  renewalDate: '2026-05-12', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '5/12/26 switched from biggest unlimited plan' },
+        { company: 'Skool AI Creators Workshop',  price: 9,      renewalDate: '2026-05-29', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
+        { company: 'Skool KDP Premium',           price: 10,     renewalDate: '2026-05-11', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: 'Need to use this more' },
+        { company: 'Claude',                      price: 20,     renewalDate: '2026-05-11', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
+        { company: 'Kindle Unlimited',            price: 12.96,  renewalDate: '2026-05-30', frequency: 'Monthly', paymentMethod: '',            notes: 'Need to use this more or cancel' },
+        { company: 'Tippiwan Facebook',           price: 0.49,   renewalDate: '2026-05-06', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
+        { company: 'Me Apple iCloud',             price: 0.99,   renewalDate: '2026-05-23', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
+        { company: 'Emorn Apple iCloud',          price: 0.99,   renewalDate: '2026-05-26', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
+        { company: 'Emorn TMobile',               price: 16.14,  renewalDate: '2026-05-18', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
+        { company: 'Setmore',                     price: 60,     renewalDate: '2026-11-09', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Need to use more or cancel' },
+        { company: 'Canva',                       price: 58,     renewalDate: '2027-05-05', frequency: 'Annual',  paymentMethod: '',            notes: '' },
+        { company: 'Hostinger VPS',               price: 203.88, renewalDate: '2026-11-07', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Only Using for N8N' },
+        { company: 'AI Creators Workshop Email',  price: 41.88,  renewalDate: '2027-01-24', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Hosted @ Namecheap' },
+        { company: 'Ongo Mobile Email',           price: 41.88,  renewalDate: '2026-11-23', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Hosted @ Namecheap' },
+        { company: 'Thailand Explorer Email',     price: 14.88,  renewalDate: '2026-08-06', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Hosted @ Namecheap' },
+      ];
+
       // --- Storage ---
 
       function loadSubscriptions() {
-        const saved = localStorage.getItem('subscriptions');
-        subscriptions = saved ? JSON.parse(saved) : [];
+        const saved   = localStorage.getItem('subscriptions');
+        const parsed  = saved ? JSON.parse(saved) : null;
+        if (!parsed || parsed.length === 0) {
+          subscriptions = SEED_SUBSCRIPTIONS.map(sub => ({ ...sub, id: crypto.randomUUID() }));
+          saveToStorage();
+          return;
+        }
+        subscriptions = parsed;
         // Migrate any entries that predate the stable-id field
         let migrated = false;
         subscriptions = subscriptions.map(sub => {
@@ -349,6 +388,32 @@
       function updateTotalCost() {
         const total = subscriptions.reduce((sum, sub) => sum + toMonthlyPrice(sub), 0);
         document.getElementById('totalCost').textContent = `$${total.toFixed(2)}`;
+
+        // Days until next annual renewal
+        const upcomingAnnualDays = subscriptions
+          .filter(sub => sub.frequency === 'Annual')
+          .map(sub => getDaysUntilRenewal(sub.renewalDate))
+          .filter(d => d >= 0)
+          .sort((a, b) => a - b);
+
+        const nextAnnualEl = document.getElementById('nextAnnualDays');
+        if (upcomingAnnualDays.length === 0) {
+          nextAnnualEl.textContent = 'None';
+        } else {
+          nextAnnualEl.textContent = getDaysText(upcomingAnnualDays[0]);
+        }
+
+        // Monthly equivalent already committed from annual subscriptions
+        const annualMonthly = subscriptions
+          .filter(sub => sub.frequency === 'Annual')
+          .reduce((sum, sub) => sum + sub.price / 12, 0);
+        document.getElementById('annualMonthlyPaid').textContent = `$${annualMonthly.toFixed(2)}`;
+
+        // Total cost of monthly-only subscriptions
+        const monthlyOnly = subscriptions
+          .filter(sub => sub.frequency === 'Monthly')
+          .reduce((sum, sub) => sum + sub.price, 0);
+        document.getElementById('monthlyOnlyTotal').textContent = `$${monthlyOnly.toFixed(2)}`;
       }
 
       function checkNotifications() {
