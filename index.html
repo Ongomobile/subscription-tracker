@@ -146,35 +146,13 @@
       let subscriptions = [];
       let editingIndex = -1;
 
-      // --- Seed data (used when localStorage is empty) ---
-
-      const SEED_SUBSCRIPTIONS = [
-        { company: 'Loom Atlassian',              price: 24,     renewalDate: '2026-05-20', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: 'I need to start using more' },
-        { company: 'Google Fi',                   price: 38.43,  renewalDate: '2026-05-12', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '5/12/26 switched from biggest unlimited plan' },
-        { company: 'Skool AI Creators Workshop',  price: 9,      renewalDate: '2026-05-29', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
-        { company: 'Skool KDP Premium',           price: 10,     renewalDate: '2026-05-11', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: 'Need to use this more' },
-        { company: 'Claude',                      price: 20,     renewalDate: '2026-05-11', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
-        { company: 'Kindle Unlimited',            price: 12.96,  renewalDate: '2026-05-30', frequency: 'Monthly', paymentMethod: '',            notes: 'Need to use this more or cancel' },
-        { company: 'Tippiwan Facebook',           price: 0.49,   renewalDate: '2026-05-06', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
-        { company: 'Me Apple iCloud',             price: 0.99,   renewalDate: '2026-05-23', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
-        { company: 'Emorn Apple iCloud',          price: 0.99,   renewalDate: '2026-05-26', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
-        { company: 'Emorn TMobile',               price: 16.14,  renewalDate: '2026-05-18', frequency: 'Monthly', paymentMethod: 'Credit Card', notes: '' },
-        { company: 'Setmore',                     price: 60,     renewalDate: '2026-11-09', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Need to use more or cancel' },
-        { company: 'Canva',                       price: 58,     renewalDate: '2027-05-05', frequency: 'Annual',  paymentMethod: '',            notes: '' },
-        { company: 'Hostinger VPS',               price: 203.88, renewalDate: '2026-11-07', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Only Using for N8N' },
-        { company: 'AI Creators Workshop Email',  price: 41.88,  renewalDate: '2027-01-24', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Hosted @ Namecheap' },
-        { company: 'Ongo Mobile Email',           price: 41.88,  renewalDate: '2026-11-23', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Hosted @ Namecheap' },
-        { company: 'Thailand Explorer Email',     price: 14.88,  renewalDate: '2026-08-06', frequency: 'Annual',  paymentMethod: 'Credit Card', notes: 'Hosted @ Namecheap' },
-      ];
-
       // --- Storage ---
 
       function loadSubscriptions() {
-        const saved   = localStorage.getItem('subscriptions');
-        const parsed  = saved ? JSON.parse(saved) : null;
+        const saved  = localStorage.getItem('subscriptions');
+        const parsed = saved ? JSON.parse(saved) : null;
         if (!parsed || parsed.length === 0) {
-          subscriptions = SEED_SUBSCRIPTIONS.map(sub => ({ ...sub, id: crypto.randomUUID() }));
-          saveToStorage();
+          subscriptions = [];
           return;
         }
         subscriptions = parsed;
