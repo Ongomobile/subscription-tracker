@@ -23,10 +23,19 @@ This is the right entry point for someone who has never built a web app. It work
 - **Auth model:** Google Sign-In via Firebase Auth.
 - **Where data lives:** Cloud Firestore, scoped to your user ID, enforced by server-side security rules.
 - **Sync model:** real-time — changes on one device appear on all others within ~1 second, no refresh.
-- **Email reminders:** not included (would require Cloud Functions on the Blaze plan).
 - **Setup guide:** [`FIREBASE_SETUP.md`](FIREBASE_SETUP.md)
 
 This is what a "real" personal app looks like. Server-enforced access control, real-time sync, no URL-sharing or PIN hacks.
+
+### Lesson 3 — Cloud Functions email reminders (optional, builds on Lesson 2)
+
+- **What it teaches:** scheduled serverless functions, secrets management, third-party API integration. The "back-end automation" pattern every real app eventually needs.
+- **What it does:** runs daily, scans every user's subscriptions, emails a digest of anything renewing in 7 days or 1 day via Resend.
+- **Stack:** Cloud Functions for Firebase + Resend API.
+- **Setup guide:** [`EMAIL_REMINDERS_SETUP.md`](EMAIL_REMINDERS_SETUP.md)
+- **Source:** [`functions/index.js`](functions/index.js)
+
+Requires the Firebase Blaze (pay-as-you-go) plan, but realistically costs $0 — the free tier covers ~2 million function invocations per month and this uses about 30.
 
 ## Why both?
 

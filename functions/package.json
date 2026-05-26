@@ -1,0 +1,18 @@
+{
+  "name": "subscription-tracker-functions",
+  "description": "Cloud Functions for the Subscription Tracker — daily renewal email reminders",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "scripts": {
+    "deploy": "firebase deploy --only functions",
+    "logs":   "firebase functions:log",
+    "serve":  "firebase emulators:start --only functions"
+  },
+  "dependencies": {
+    "firebase-admin":     "^12.6.0",
+    "firebase-functions": "^6.0.1"
+  },
+  "private": true
+}
