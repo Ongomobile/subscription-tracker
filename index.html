@@ -421,15 +421,22 @@
 
       // --- Utilities ---
 
+      // Parse a YYYY-MM-DD string as LOCAL midnight, not UTC midnight.
+      // Without this, new Date('2025-06-15') is UTC midnight which lands on
+      // June 14 in any timezone behind UTC — causing every date to appear a day early.
+      function parseLocalDate(dateStr) {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        return new Date(y, m - 1, d); // month is 0-indexed
+      }
+
       function getDaysUntilRenewal(renewalDate) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const renewal = new Date(renewalDate);
-        renewal.setHours(0, 0, 0, 0);
+        const renewal = parseLocalDate(renewalDate);
         return Math.ceil((renewal - today) / (1000 * 60 * 60 * 24));
       }
 
-      // Formats a Date as a local YYYY-MM-DD string, avoiding UTC-drift issues.
+      // Formats a Date object as a local YYYY-MM-DD string.
       function toLocalDateString(date) {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -444,8 +451,7 @@
       function getNextRenewalDate(sub) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const next = new Date(sub.renewalDate);
-        next.setHours(0, 0, 0, 0);
+        const next = parseLocalDate(sub.renewalDate); // local midnight, not UTC
         if (next >= today) return next;
         const freq = sub.frequency || 'Monthly';
         if (freq === 'Monthly') {
@@ -480,7 +486,7 @@
       }
 
       function formatDate(dateString) {
-        return new Date(dateString).toLocaleDateString('en-US', {
+        return parseLocalDate(dateString).toLocaleDateString('en-US', {
           year: 'numeric', month: 'short', day: 'numeric',
         });
       }
