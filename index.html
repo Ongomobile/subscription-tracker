@@ -252,6 +252,35 @@
         return Math.ceil((renewal - today) / (1000 * 60 * 60 * 24));
       }
 
+      // Formats a Date as a local YYYY-MM-DD string, avoiding UTC-drift issues.
+      function toLocalDateString(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      // For recurring subscriptions whose stored renewal date has already passed,
+      // rolls the date forward by the billing interval until it lands in the future.
+      // Monthly / Quarterly subs are ongoing until cancelled — they should never
+      // show as "Expired", only as "renews in X days".
+      function getNextRenewalDate(sub) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const next = new Date(sub.renewalDate);
+        next.setHours(0, 0, 0, 0);
+        if (next >= today) return next;
+        const freq = sub.frequency || 'Monthly';
+        if (freq === 'Monthly') {
+          while (next < today) next.setMonth(next.getMonth() + 1);
+        } else if (freq === 'Quarterly') {
+          while (next < today) next.setMonth(next.getMonth() + 3);
+        } else { // Annual
+          while (next < today) next.setFullYear(next.getFullYear() + 1);
+        }
+        return next;
+      }
+
       function getStatusColor(days) {
         if (days < 0)  return 'bg-gray-100 border-gray-300';
         if (days <= 3) return 'bg-red-50 border-red-300';
@@ -296,7 +325,9 @@
       // --- Rendering ---
 
       function createSubscriptionCard(sub, index) {
-        const days        = getDaysUntilRenewal(sub.renewalDate);
+        const nextRenewal    = getNextRenewalDate(sub);
+        const nextRenewalStr = toLocalDateString(nextRenewal);
+        const days        = getDaysUntilRenewal(nextRenewalStr);
         const statusColor = getStatusColor(days);
         const badgeColor  = getBadgeColor(days);
         const daysText    = getDaysText(days);
@@ -319,7 +350,7 @@
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-sm text-gray-600">
                   <div><span class="font-medium">Price:</span> $${sub.price.toFixed(2)}</div>
-                  <div><span class="font-medium">Renewal:</span> ${formatDate(sub.renewalDate)}</div>
+                  <div><span class="font-medium">Next Renewal:</span> ${formatDate(nextRenewalStr)}</div>
                   <div><span class="font-medium">Frequency:</span> ${escapeHTML(sub.frequency || 'Monthly')}</div>
                   <div><span class="font-medium">Payment:</span> ${escapeHTML(sub.paymentMethod || 'N/A')}</div>
                 </div>
@@ -355,7 +386,7 @@
         emptyState.classList.add('hidden');
 
         const sortedIndices = [...subscriptions.keys()].sort(
-          (a, b) => new Date(subscriptions[a].renewalDate) - new Date(subscriptions[b].renewalDate)
+          (a, b) => getNextRenewalDate(subscriptions[a]) - getNextRenewalDate(subscriptions[b])
         );
 
         container.innerHTML = sortedIndices
@@ -370,7 +401,7 @@
         // Days until next annual renewal
         const upcomingAnnualDays = subscriptions
           .filter(sub => sub.frequency === 'Annual')
-          .map(sub => getDaysUntilRenewal(sub.renewalDate))
+          .map(sub => getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub))))
           .filter(d => d >= 0)
           .sort((a, b) => a - b);
 
@@ -397,7 +428,7 @@
       function checkNotifications() {
         const area         = document.getElementById('notificationArea');
         const expiringSoon = subscriptions.filter(sub => {
-          const d = getDaysUntilRenewal(sub.renewalDate);
+          const d = getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub)));
           return d >= 0 && d <= 3;
         });
 
@@ -407,7 +438,7 @@
         }
 
         const items = expiringSoon.map(sub => {
-          const d    = getDaysUntilRenewal(sub.renewalDate);
+          const d    = getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub)));
           const when = d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`;
           return `<li><strong>${escapeHTML(sub.company)}</strong> renews ${when}!</li>`;
         }).join('');
