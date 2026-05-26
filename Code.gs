@@ -93,7 +93,10 @@ function saveSettings(settings) {
   const sheet = getOrCreateSheet(SETTINGS_SHEET);
   sheet.clearContents();
   sheet.getRange(1, 1, 1, 2).setValues([['email', 'notifyDaysBefore']]);
-  sheet.getRange(2, 1, 1, 2).setValues([[settings.email || '', settings.notifyDaysBefore || 7]]);
+  sheet.getRange(2, 1, 1, 2).setValues([[
+    settings.email            || '',
+    settings.notifyDaysBefore || 7,
+  ]]);
 }
 
 // ---- Email reminders ----
