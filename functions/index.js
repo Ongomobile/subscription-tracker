@@ -29,6 +29,10 @@ const TIMEZONE = 'America/Los_Angeles';
 // e.g. [7, 1] sends one week before, then again the day before.
 const NOTIFY_DAYS = [7, 1];
 
+// Trials convert to a paid charge once — remind this many days before the
+// trial ends so there's time to cancel.
+const TRIAL_NOTIFY_DAYS = [2];
+
 // Resend's test sender — works for any "from" address but only delivers to
 // the email that owns your Resend account. For production / multi-user, verify
 // a domain at resend.com/domains and replace this with your verified address.
@@ -63,7 +67,11 @@ exports.sendRenewalReminders = onSchedule(
 
     let emailsSent = 0;
     for (const [userId, subs] of byUser) {
-      const due = subs.filter((sub) => NOTIFY_DAYS.includes(daysUntilNextRenewal(sub)));
+      const due = subs.filter((sub) =>
+        sub.isTrial
+          ? TRIAL_NOTIFY_DAYS.includes(daysUntilTrialEnd(sub))
+          : NOTIFY_DAYS.includes(daysUntilNextRenewal(sub))
+      );
       if (due.length === 0) continue;
 
       let user;
@@ -93,11 +101,27 @@ exports.sendRenewalReminders = onSchedule(
 
 // ---- Helpers ----------------------------------------------------------------
 
+// "Today" as observed in TIMEZONE, not the server's UTC clock. Cloud Functions
+// run in UTC, which can be a calendar day ahead of the user — that would make a
+// "2 days away" trial look like 1 day. We read the Y/M/D as seen in TIMEZONE and
+// rebuild a date so all day-difference math is anchored to the user's day.
+function startOfTodayInTimezone() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const y = Number(parts.find((p) => p.type === 'year').value);
+  const m = Number(parts.find((p) => p.type === 'month').value);
+  const d = Number(parts.find((p) => p.type === 'day').value);
+  return new Date(y, m - 1, d);
+}
+
 // Mirrors the client-side rolling renewal logic — past dates roll forward by
 // the billing interval until they land in the future. Returns whole days away.
 function daysUntilNextRenewal(sub) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = startOfTodayInTimezone();
 
   // Parse YYYY-MM-DD as local midnight to avoid UTC drift
   const [y, m, d] = String(sub.renewalDate).split('-').map(Number);
@@ -112,22 +136,35 @@ function daysUntilNextRenewal(sub) {
   return Math.ceil((next - today) / 86_400_000);
 }
 
+// Days until a trial ends — does NOT roll forward, since a trial converts once.
+function daysUntilTrialEnd(sub) {
+  const today = startOfTodayInTimezone();
+  const [y, m, d] = String(sub.renewalDate).split('-').map(Number);
+  const end = new Date(y, m - 1, d);
+  return Math.ceil((end - today) / 86_400_000);
+}
+
 async function sendReminderEmail(to, name, subs) {
   const lines = subs
     .map((sub) => {
+      const price = Number(sub.price).toFixed(2);
+      if (sub.isTrial) {
+        const days = daysUntilTrialEnd(sub);
+        const when = days === 0 ? 'TODAY' : days === 1 ? 'tomorrow' : `in ${days} days`;
+        return `🎁 ${sub.company} — FREE TRIAL ends ${when} — cancel before then to avoid being charged $${price}`;
+      }
       const days = daysUntilNextRenewal(sub);
       const when = days === 0 ? 'TODAY' : days === 1 ? 'tomorrow' : `in ${days} days`;
-      const price = Number(sub.price).toFixed(2);
-      const freq  = sub.frequency || 'Monthly';
+      const freq = sub.frequency || 'Monthly';
       return `• ${sub.company}  ($${price} / ${freq})  —  renews ${when}`;
     })
     .join('\n');
 
   const count   = subs.length;
-  const subject = `🔔 ${count} subscription${count === 1 ? '' : 's'} renewing soon`;
+  const subject = `🔔 ${count} subscription${count === 1 ? '' : 's'} need${count === 1 ? 's' : ''} your attention`;
   const body =
     `Hi ${name},\n\n` +
-    `Here's a heads-up on your upcoming subscription renewals:\n\n` +
+    `Here's a heads-up on your upcoming renewals and trials:\n\n` +
     `${lines}\n\n` +
     `Open your Subscription Tracker to review or cancel before the charge hits.\n\n` +
     `— Your Subscription Tracker`;

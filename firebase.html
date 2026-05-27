@@ -263,7 +263,11 @@
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Price ($) *</label>
+              <label
+                id="priceLabel"
+                class="block text-sm font-medium text-gray-700 mb-1"
+                >Price ($) *</label
+              >
               <input
                 type="number"
                 id="price"
@@ -273,7 +277,28 @@
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Renewal Date *</label>
+              <label class="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="isTrial"
+                  onchange="toggleTrialLabels()"
+                  class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                🎁 This is a free trial
+              </label>
+              <p
+                id="trialHint"
+                class="text-xs text-gray-500 mt-1 hidden"
+              >
+                You'll get a reminder 2 days before the trial ends so you can cancel before being charged.
+              </p>
+            </div>
+            <div>
+              <label
+                id="renewalDateLabel"
+                class="block text-sm font-medium text-gray-700 mb-1"
+                >Renewal Date *</label
+              >
               <input
                 type="date"
                 id="renewalDate"
@@ -495,6 +520,7 @@
           frequency: document.getElementById('frequency').value,
           paymentMethod: document.getElementById('paymentMethod').value,
           notes: document.getElementById('notes').value.trim(),
+          isTrial: document.getElementById('isTrial').checked,
         };
         try {
           await setDoc(userSubDoc(id), data);
@@ -523,6 +549,7 @@
         editingId = null;
         document.getElementById('modalTitle').textContent = 'Add Subscription';
         document.getElementById('subscriptionForm').reset();
+        toggleTrialLabels();
         document.getElementById('modal').classList.remove('hidden');
       }
 
@@ -537,6 +564,8 @@
         document.getElementById('frequency').value = sub.frequency || 'Monthly';
         document.getElementById('paymentMethod').value = sub.paymentMethod || '';
         document.getElementById('notes').value = sub.notes || '';
+        document.getElementById('isTrial').checked = !!sub.isTrial;
+        toggleTrialLabels();
         document.getElementById('modal').classList.remove('hidden');
       }
 
@@ -544,6 +573,16 @@
         document.getElementById('modal').classList.add('hidden');
         document.getElementById('subscriptionForm').reset();
         editingId = null;
+      }
+
+      // Relabels the date/price fields to match trial vs. regular subscription
+      function toggleTrialLabels() {
+        const isTrial = document.getElementById('isTrial').checked;
+        document.getElementById('renewalDateLabel').textContent = isTrial
+          ? 'Trial ends — first charge date *'
+          : 'Renewal Date *';
+        document.getElementById('priceLabel').textContent = isTrial ? 'Price after trial ($) *' : 'Price ($) *';
+        document.getElementById('trialHint').classList.toggle('hidden', !isTrial);
       }
 
       // ====================================================================
@@ -589,6 +628,12 @@
           while (next < today) next.setFullYear(next.getFullYear() + 1);
         }
         return next;
+      }
+
+      // The date that matters for display/sorting/reminders. Trials convert once,
+      // so their date does NOT roll forward — recurring subs do (via getNextRenewalDate).
+      function getEffectiveDate(sub) {
+        return sub.isTrial ? parseLocalDate(sub.renewalDate) : getNextRenewalDate(sub);
       }
 
       function getStatusColor(days) {
@@ -638,12 +683,22 @@
       // Rendering
       // ====================================================================
       function createSubscriptionCard(sub) {
-        const nextRenewal = getNextRenewalDate(sub);
-        const nextRenewalStr = toLocalDateString(nextRenewal);
-        const days = getDaysUntilRenewal(nextRenewalStr);
+        const effectiveDate = getEffectiveDate(sub);
+        const effectiveStr = toLocalDateString(effectiveDate);
+        const days = getDaysUntilRenewal(effectiveStr);
         const statusColor = getStatusColor(days);
         const badgeColor = getBadgeColor(days);
-        const daysText = getDaysText(days);
+        // Trials end once (no roll-forward), so a past trial reads "Trial ended"
+        const daysText = sub.isTrial && days < 0 ? 'Trial ended' : getDaysText(days);
+
+        const trialBadge = sub.isTrial
+          ? `<span class="bg-indigo-500 text-white text-xs font-semibold px-2 py-1 rounded-full shrink-0">TRIAL</span>`
+          : '';
+
+        const dateLabel = sub.isTrial ? 'Trial ends' : 'Next Renewal';
+        const priceText = sub.isTrial
+          ? `$${Number(sub.price).toFixed(2)} after trial`
+          : `$${Number(sub.price).toFixed(2)}`;
 
         const notesHTML = sub.notes
           ? `<div class="mt-3 pt-3 border-t border-gray-200">
@@ -659,11 +714,12 @@
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-2">
                   <h3 class="text-lg font-semibold text-gray-800">${escapeHTML(sub.company)}</h3>
+                  ${trialBadge}
                   <span class="${badgeColor} text-white text-xs px-2 py-1 rounded-full shrink-0">${daysText}</span>
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-sm text-gray-600">
-                  <div><span class="font-medium">Price:</span> $${Number(sub.price).toFixed(2)}</div>
-                  <div><span class="font-medium">Next Renewal:</span> ${formatDate(nextRenewalStr)}</div>
+                  <div><span class="font-medium">Price:</span> ${priceText}</div>
+                  <div><span class="font-medium">${dateLabel}:</span> ${formatDate(effectiveStr)}</div>
                   <div><span class="font-medium">Frequency:</span> ${escapeHTML(sub.frequency || 'Monthly')}</div>
                   <div><span class="font-medium">Payment:</span> ${escapeHTML(sub.paymentMethod || 'N/A')}</div>
                 </div>
@@ -698,16 +754,19 @@
 
         emptyState.classList.add('hidden');
 
-        const sorted = [...subscriptions].sort((a, b) => getNextRenewalDate(a) - getNextRenewalDate(b));
+        const sorted = [...subscriptions].sort((a, b) => getEffectiveDate(a) - getEffectiveDate(b));
 
         container.innerHTML = sorted.map((sub) => createSubscriptionCard(sub)).join('');
       }
 
       function updateTotalCost() {
-        const total = subscriptions.reduce((sum, sub) => sum + toMonthlyPrice(sub), 0);
+        // Trials cost $0 until they convert, so they're excluded from every cost stat.
+        const billable = subscriptions.filter((sub) => !sub.isTrial);
+
+        const total = billable.reduce((sum, sub) => sum + toMonthlyPrice(sub), 0);
         document.getElementById('totalCost').textContent = `$${total.toFixed(2)}`;
 
-        const upcomingAnnualDays = subscriptions
+        const upcomingAnnualDays = billable
           .filter((sub) => sub.frequency === 'Annual')
           .map((sub) => getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub))))
           .filter((d) => d >= 0)
@@ -716,12 +775,12 @@
         const nextAnnualEl = document.getElementById('nextAnnualDays');
         nextAnnualEl.textContent = upcomingAnnualDays.length ? getDaysText(upcomingAnnualDays[0]) : 'None';
 
-        const annualMonthly = subscriptions
+        const annualMonthly = billable
           .filter((sub) => sub.frequency === 'Annual')
           .reduce((sum, sub) => sum + sub.price / 12, 0);
         document.getElementById('annualMonthlyPaid').textContent = `$${annualMonthly.toFixed(2)}`;
 
-        const monthlyOnly = subscriptions
+        const monthlyOnly = billable
           .filter((sub) => sub.frequency === 'Monthly')
           .reduce((sum, sub) => sum + sub.price, 0);
         document.getElementById('monthlyOnlyTotal').textContent = `$${monthlyOnly.toFixed(2)}`;
@@ -730,7 +789,7 @@
       function checkNotifications() {
         const area = document.getElementById('notificationArea');
         const expiringSoon = subscriptions.filter((sub) => {
-          const d = getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub)));
+          const d = getDaysUntilRenewal(toLocalDateString(getEffectiveDate(sub)));
           return d >= 0 && d <= 3;
         });
 
@@ -741,9 +800,11 @@
 
         const items = expiringSoon
           .map((sub) => {
-            const d = getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub)));
+            const d = getDaysUntilRenewal(toLocalDateString(getEffectiveDate(sub)));
             const when = d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`;
-            return `<li><strong>${escapeHTML(sub.company)}</strong> renews ${when}!</li>`;
+            return sub.isTrial
+              ? `<li><strong>${escapeHTML(sub.company)}</strong> free trial ends ${when} — cancel to avoid a charge!</li>`
+              : `<li><strong>${escapeHTML(sub.company)}</strong> renews ${when}!</li>`;
           })
           .join('');
 
@@ -922,6 +983,7 @@
       window.showAddModal = showAddModal;
       window.showEditModal = showEditModal;
       window.closeModal = closeModal;
+      window.toggleTrialLabels = toggleTrialLabels;
       window.saveSubscription = saveSubscription;
       window.deleteSubscription = deleteSubscription;
       window.importCSV = importCSV;
