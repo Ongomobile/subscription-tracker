@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Subscription Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes slideIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .notification-badge { animation: slideIn 0.3s ease-out; }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+
+      <!-- Header -->
+      <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Subscription Tracker</h1>
+            <p class="text-gray-600">Manage your subscriptions and never miss a renewal</p>
+            <p id="syncStatus" class="text-sm font-medium mt-1 hidden"></p>
+          </div>
+          <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 min-w-[140px]">
+              <p class="text-sm text-gray-600">Total Monthly Cost</p>
+              <p class="text-2xl font-bold text-blue-600" id="totalCost">$0.00</p>
+            </div>
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 min-w-[140px]">
+              <p class="text-sm text-gray-600">Next Annual Renewal</p>
+              <p class="text-2xl font-bold text-purple-600" id="nextAnnualDays">—</p>
+            </div>
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4 min-w-[140px]">
+              <p class="text-sm text-gray-600">Annual Subs / Month</p>
+              <p class="text-2xl font-bold text-green-600" id="annualMonthlyPaid">$0.00</p>
+            </div>
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 min-w-[140px]">
+              <p class="text-sm text-gray-600">Monthly Subs Total</p>
+              <p class="text-2xl font-bold text-orange-600" id="monthlyOnlyTotal">$0.00</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div id="notificationArea" class="mb-6"></div>
+
+      <!-- Action Buttons -->
+      <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex flex-wrap gap-3">
+          <button onclick="showAddModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+            + Add Subscription
+          </button>
+          <button onclick="importCSV()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition">
+            Import CSV
+          </button>
+          <button onclick="exportCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition">
+            Export CSV
+          </button>
+          <button onclick="exportToGoogleCalendar()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition">
+            📅 Export to Google Calendar
+          </button>
+          <button onclick="showSettingsModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition">
+            ⚙️ Settings
+          </button>
+          <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVUpload(event)" />
+        </div>
+      </div>
+
+      <!-- Subscriptions List -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Your Subscriptions</h2>
+        <div id="subscriptionsList" class="space-y-3"></div>
+        <div id="emptyState" class="text-center py-12 hidden">
+          <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+          </svg>
+          <p class="mt-2 text-gray-600">No subscriptions yet. Add your first one!</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-screen overflow-y-auto">
+        <h3 id="modalTitle" class="text-2xl font-bold text-gray-800 mb-4">Add Subscription</h3>
+        <form id="subscriptionForm" onsubmit="saveSubscription(event)">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+              <input type="text" id="company" required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Price ($) *</label>
+              <input type="number" id="price" step="0.01" required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Renewal Date *</label>
+              <input type="date" id="renewalDate" required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Billing Frequency</label>
+              <select id="frequency"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="Monthly">Monthly</option>
+                <option value="Annual">Annual</option>
+                <option value="Quarterly">Quarterly</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+              <select id="paymentMethod"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="">Select method</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Debit Card">Debit Card</option>
+                <option value="PayPal">PayPal</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <textarea id="notes" rows="3" placeholder="Account details, login info, cancellation steps…"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"></textarea>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button type="submit"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
+              Save
+            </button>
+            <button type="button" onclick="closeModal()"
+              class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg font-medium transition">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- PIN Lock Screen -->
+    <div id="pinScreen" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
+        <div class="text-4xl mb-4">🔒</div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">Subscription Tracker</h2>
+        <p class="text-gray-500 text-sm mb-6">Enter your PIN to continue</p>
+        <form onsubmit="submitPin(event)">
+          <input type="password" id="pinInput" maxlength="20" placeholder="PIN"
+            class="w-full text-center text-xl px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-3 tracking-widest" />
+          <p id="pinError" class="text-red-500 text-sm mb-3 hidden">Incorrect PIN — try again</p>
+          <button type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold text-lg transition">
+            Unlock
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-screen overflow-y-auto">
+        <h3 class="text-2xl font-bold text-gray-800 mb-1">⚙️ Settings</h3>
+        <p class="text-sm text-gray-500 mb-4">Connect Google Sheets to sync data across devices and receive email renewal reminders.</p>
+        <form id="settingsForm" onsubmit="saveSettingsForm(event)">
+          <div class="space-y-4">
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Apps Script URL</label>
+              <input type="text" id="settingsScriptUrl"
+                placeholder="https://script.google.com/macros/s/…/exec"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm" />
+              <p class="text-xs text-gray-500 mt-1">Paste the web app URL from your Google Apps Script deployment. Leave blank to use local storage only.</p>
+            </div>
+
+            <hr class="border-gray-200" />
+            <p class="text-xs text-gray-400">The fields below are saved to your Google Sheet and used by the daily email reminder script.</p>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Notification Email</label>
+              <input type="email" id="settingsEmail" placeholder="you@gmail.com"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Days before renewal to send reminder</label>
+              <input type="number" id="settingsDays" min="1" max="30" value="7"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+              <p class="text-xs text-gray-500 mt-1">e.g. 7 = email sent one week before each renewal date</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Access PIN <span class="text-gray-400 font-normal">(optional)</span></label>
+              <input type="password" id="settingsPin" placeholder="Leave blank for no PIN"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+              <p class="text-xs text-gray-500 mt-1">If set, anyone opening the app must enter this PIN first. Stored securely in your Google Sheet.</p>
+            </div>
+
+            <div id="shareableLinkSection" class="hidden">
+              <hr class="border-gray-200 mb-4" />
+              <label class="block text-sm font-medium text-gray-700 mb-1">📎 Your shareable setup link</label>
+              <div class="flex gap-2">
+                <input type="text" id="shareableUrl" readonly
+                  class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-xs text-gray-600 truncate" />
+                <button type="button" onclick="copyShareableUrl()"
+                  class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-2 rounded-lg text-sm font-medium transition shrink-0">
+                  Copy
+                </button>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">Bookmark this link on any device — opening it connects automatically, no setup needed.</p>
+            </div>
+
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button type="submit"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
+              Save Settings
+            </button>
+            <button type="button" onclick="closeSettingsModal()"
+              class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg font-medium transition">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let subscriptions = [];
+      let editingIndex  = -1;
+
+      // Google Sheets web app URL — saved in localStorage, set via Settings panel
+      let SCRIPT_URL  = localStorage.getItem('scriptUrl') || '';
+      // Notification settings — email and days are synced to Google Sheets
+      let appSettings = JSON.parse(localStorage.getItem('appSettings') || '{"email":"","notifyDaysBefore":7}');
+      // PIN lives in localStorage only — it's a per-device lock, not synced data
+      // so nothing can ever overwrite it during a Sheets sync
+      let appPin      = localStorage.getItem('appPin') || '';
+      // PIN only needs to be entered once per browser session
+      let pinVerified = sessionStorage.getItem('pinVerified') === 'true';
+
+      // ---- Local storage ----
+
+      function saveToLocalStorage() {
+        localStorage.setItem('subscriptions', JSON.stringify(subscriptions));
+      }
+
+      function loadFromLocalStorage() {
+        const saved  = localStorage.getItem('subscriptions');
+        const parsed = saved ? JSON.parse(saved) : null;
+        if (!parsed || parsed.length === 0) { subscriptions = []; return; }
+        subscriptions = parsed;
+        let migrated = false;
+        subscriptions = subscriptions.map(sub => {
+          if (sub.id) return sub;
+          migrated = true;
+          return { ...sub, id: crypto.randomUUID() };
+        });
+        if (migrated) saveToLocalStorage();
+      }
+
+      // ---- Sync status indicator ----
+
+      function setSyncStatus(status) {
+        const el  = document.getElementById('syncStatus');
+        const map = {
+          syncing: { text: '⏳ Syncing…',                          cls: 'text-blue-600' },
+          synced:  { text: '☁️ Synced with Google Sheets',         cls: 'text-green-600' },
+          error:   { text: '⚠️ Sync failed — data saved locally',  cls: 'text-orange-500' },
+        };
+        const s = map[status];
+        if (!s) { el.classList.add('hidden'); return; }
+        el.textContent = s.text;
+        el.className   = `text-sm font-medium mt-1 ${s.cls}`;
+        el.classList.remove('hidden');
+      }
+
+      // ---- Google Sheets API calls ----
+
+      async function sheetsGet(action) {
+        if (!SCRIPT_URL) return null;
+        try {
+          const res = await fetch(`${SCRIPT_URL}?action=${action}`, { redirect: 'follow' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return await res.json();
+        } catch (e) {
+          console.warn('Sheets GET error:', e);
+          return null;
+        }
+      }
+
+      async function sheetsPost(payload) {
+        if (!SCRIPT_URL) return false;
+        try {
+          // text/plain avoids a CORS preflight request
+          await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload),
+            redirect: 'follow',
+          });
+          return true;
+        } catch (e) {
+          console.warn('Sheets POST error:', e);
+          return false;
+        }
+      }
+
+      async function syncFromSheets() {
+        setSyncStatus('syncing');
+        const data = await sheetsGet('getSubscriptions');
+        if (data && Array.isArray(data.subscriptions)) {
+          subscriptions = data.subscriptions.map(sub => ({
+            ...sub,
+            price: parseFloat(sub.price),
+            id: sub.id || crypto.randomUUID(),
+          }));
+          saveToLocalStorage();
+          renderSubscriptions();
+          updateTotalCost();
+          checkNotifications();
+          setSyncStatus('synced');
+          return true;
+        }
+        setSyncStatus('error');
+        return false;
+      }
+
+      async function pushToSheets() {
+        if (!SCRIPT_URL) return;
+        setSyncStatus('syncing');
+        const ok = await sheetsPost({ action: 'saveSubscriptions', subscriptions });
+        setSyncStatus(ok ? 'synced' : 'error');
+      }
+
+      async function loadSettingsFromSheets() {
+        const data = await sheetsGet('getSettings');
+        if (data && data.email !== undefined) {
+          // Only update the fields that live in Sheets — never touch appPin,
+          // which is a separate localStorage key that nothing should overwrite
+          appSettings.email            = data.email;
+          appSettings.notifyDaysBefore = data.notifyDaysBefore || 7;
+          localStorage.setItem('appSettings', JSON.stringify(appSettings));
+        }
+      }
+
+      async function pushSettingsToSheets() {
+        if (!SCRIPT_URL) return;
+        await sheetsPost({ action: 'saveSettings', settings: appSettings });
+      }
+
+      // ---- Init ----
+
+      // If the URL contains ?s=SCRIPT_URL, save it to localStorage and strip
+      // it from the address bar. Lets you share a single bookmarkable link that
+      // auto-connects any device without manually entering the Script URL.
+      function applyScriptUrlParam() {
+        const params   = new URLSearchParams(window.location.search);
+        const urlParam = params.get('s');
+        if (urlParam && urlParam.trim()) {
+          SCRIPT_URL = urlParam.trim();
+          localStorage.setItem('scriptUrl', SCRIPT_URL);
+          // Remove ?s= from the address bar so it stays tidy
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+
+      async function init() {
+        applyScriptUrlParam(); // must run before anything else reads SCRIPT_URL
+
+        // If a PIN is set on this device and not yet verified this session,
+        // show the lock screen before rendering any data
+        if (appPin && !pinVerified) {
+          showPinScreen();
+          return;
+        }
+
+        loadFromLocalStorage();
+        renderSubscriptions();
+        updateTotalCost();
+        checkNotifications();
+        if (SCRIPT_URL) {
+          const ok = await syncFromSheets();
+          if (ok) await loadSettingsFromSheets();
+        }
+      }
+
+      // ---- PIN lock screen ----
+
+      function showPinScreen() {
+        document.getElementById('pinScreen').classList.remove('hidden');
+        document.getElementById('pinInput').focus();
+      }
+
+      function hidePinScreen() {
+        document.getElementById('pinScreen').classList.add('hidden');
+      }
+
+      function submitPin(event) {
+        if (event) event.preventDefault();
+        const entered = document.getElementById('pinInput').value;
+        if (entered === appPin) {
+          pinVerified = true;
+          sessionStorage.setItem('pinVerified', 'true');
+          hidePinScreen();
+          loadFromLocalStorage();
+          renderSubscriptions();
+          updateTotalCost();
+          checkNotifications();
+          if (SCRIPT_URL) syncFromSheets().then(ok => { if (ok) loadSettingsFromSheets(); });
+        } else {
+          document.getElementById('pinError').classList.remove('hidden');
+          document.getElementById('pinInput').value = '';
+          document.getElementById('pinInput').focus();
+        }
+      }
+
+      // ---- Subscription modal ----
+
+      function showAddModal() {
+        editingIndex = -1;
+        document.getElementById('modalTitle').textContent = 'Add Subscription';
+        document.getElementById('subscriptionForm').reset();
+        document.getElementById('modal').classList.remove('hidden');
+      }
+
+      function showEditModal(index) {
+        editingIndex = index;
+        const sub = subscriptions[index];
+        document.getElementById('modalTitle').textContent = 'Edit Subscription';
+        document.getElementById('company').value      = sub.company;
+        document.getElementById('price').value        = sub.price;
+        document.getElementById('renewalDate').value  = sub.renewalDate;
+        document.getElementById('frequency').value    = sub.frequency || 'Monthly';
+        document.getElementById('paymentMethod').value = sub.paymentMethod || '';
+        document.getElementById('notes').value        = sub.notes || '';
+        document.getElementById('modal').classList.remove('hidden');
+      }
+
+      function closeModal() {
+        document.getElementById('modal').classList.add('hidden');
+        document.getElementById('subscriptionForm').reset();
+        editingIndex = -1;
+      }
+
+      function saveSubscription(event) {
+        event.preventDefault();
+        const subscription = {
+          id:            editingIndex >= 0 ? subscriptions[editingIndex].id : crypto.randomUUID(),
+          company:       document.getElementById('company').value,
+          price:         parseFloat(document.getElementById('price').value),
+          renewalDate:   document.getElementById('renewalDate').value,
+          frequency:     document.getElementById('frequency').value,
+          paymentMethod: document.getElementById('paymentMethod').value,
+          notes:         document.getElementById('notes').value.trim(),
+        };
+
+        if (editingIndex >= 0) {
+          subscriptions[editingIndex] = subscription;
+        } else {
+          subscriptions.push(subscription);
+        }
+
+        saveToLocalStorage();
+        renderSubscriptions();
+        updateTotalCost();
+        checkNotifications();
+        closeModal();
+        pushToSheets();
+      }
+
+      function deleteSubscription(index) {
+        if (confirm('Are you sure you want to delete this subscription?')) {
+          subscriptions.splice(index, 1);
+          saveToLocalStorage();
+          renderSubscriptions();
+          updateTotalCost();
+          checkNotifications();
+          pushToSheets();
+        }
+      }
+
+      // ---- Settings modal ----
+
+      function showSettingsModal() {
+        document.getElementById('settingsScriptUrl').value = SCRIPT_URL;
+        document.getElementById('settingsEmail').value     = appSettings.email || '';
+        document.getElementById('settingsDays').value      = appSettings.notifyDaysBefore || 7;
+        document.getElementById('settingsPin').value       = appPin;
+
+        // Build and show the shareable link if a Script URL is already configured
+        const linkSection = document.getElementById('shareableLinkSection');
+        if (SCRIPT_URL) {
+          const shareUrl = `${window.location.origin}${window.location.pathname}?s=${encodeURIComponent(SCRIPT_URL)}`;
+          document.getElementById('shareableUrl').value = shareUrl;
+          linkSection.classList.remove('hidden');
+        } else {
+          linkSection.classList.add('hidden');
+        }
+
+        document.getElementById('settingsModal').classList.remove('hidden');
+      }
+
+      function closeSettingsModal() {
+        document.getElementById('settingsModal').classList.add('hidden');
+      }
+
+      function copyShareableUrl() {
+        const input = document.getElementById('shareableUrl');
+        navigator.clipboard.writeText(input.value).then(() => {
+          const btn = event.target;
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        });
+      }
+
+      async function saveSettingsForm(event) {
+        event.preventDefault();
+        SCRIPT_URL                   = document.getElementById('settingsScriptUrl').value.trim();
+        appSettings.email            = document.getElementById('settingsEmail').value.trim();
+        appSettings.notifyDaysBefore = parseInt(document.getElementById('settingsDays').value) || 7;
+        appPin                       = document.getElementById('settingsPin').value;
+
+        localStorage.setItem('scriptUrl',   SCRIPT_URL);
+        localStorage.setItem('appSettings', JSON.stringify(appSettings));
+        localStorage.setItem('appPin',      appPin); // PIN is local-only, never sent to Sheets
+        closeSettingsModal();
+
+        if (SCRIPT_URL) {
+          const ok = await syncFromSheets();
+          if (ok) {
+            await pushSettingsToSheets();
+            setSyncStatus('synced');
+          }
+        }
+      }
+
+      // --- Utilities ---
+
+      // Parse a YYYY-MM-DD string as LOCAL midnight, not UTC midnight.
+      // Without this, new Date('2025-06-15') is UTC midnight which lands on
+      // June 14 in any timezone behind UTC — causing every date to appear a day early.
+      function parseLocalDate(dateStr) {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        return new Date(y, m - 1, d); // month is 0-indexed
+      }
+
+      function getDaysUntilRenewal(renewalDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const renewal = parseLocalDate(renewalDate);
+        return Math.ceil((renewal - today) / (1000 * 60 * 60 * 24));
+      }
+
+      // Formats a Date object as a local YYYY-MM-DD string.
+      function toLocalDateString(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      // For recurring subscriptions whose stored renewal date has already passed,
+      // rolls the date forward by the billing interval until it lands in the future.
+      // Monthly / Quarterly subs are ongoing until cancelled — they should never
+      // show as "Expired", only as "renews in X days".
+      function getNextRenewalDate(sub) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const next = parseLocalDate(sub.renewalDate); // local midnight, not UTC
+        if (next >= today) return next;
+        const freq = sub.frequency || 'Monthly';
+        if (freq === 'Monthly') {
+          while (next < today) next.setMonth(next.getMonth() + 1);
+        } else if (freq === 'Quarterly') {
+          while (next < today) next.setMonth(next.getMonth() + 3);
+        } else { // Annual
+          while (next < today) next.setFullYear(next.getFullYear() + 1);
+        }
+        return next;
+      }
+
+      function getStatusColor(days) {
+        if (days < 0)  return 'bg-gray-100 border-gray-300';
+        if (days <= 3) return 'bg-red-50 border-red-300';
+        if (days <= 7) return 'bg-yellow-50 border-yellow-300';
+        return 'bg-green-50 border-green-300';
+      }
+
+      function getBadgeColor(days) {
+        if (days < 0)  return 'bg-gray-500';
+        if (days <= 3) return 'bg-red-500';
+        if (days <= 7) return 'bg-yellow-500';
+        return 'bg-green-500';
+      }
+
+      function getDaysText(days) {
+        if (days < 0)  return 'Expired';
+        if (days === 0) return 'Today!';
+        if (days === 1) return 'Tomorrow';
+        return `${days} days`;
+      }
+
+      function formatDate(dateString) {
+        return parseLocalDate(dateString).toLocaleDateString('en-US', {
+          year: 'numeric', month: 'short', day: 'numeric',
+        });
+      }
+
+      function toMonthlyPrice(sub) {
+        if (sub.frequency === 'Annual')    return sub.price / 12;
+        if (sub.frequency === 'Quarterly') return sub.price / 3;
+        return sub.price;
+      }
+
+      function escapeHTML(str) {
+        return String(str ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      // --- Rendering ---
+
+      function createSubscriptionCard(sub, index) {
+        const nextRenewal    = getNextRenewalDate(sub);
+        const nextRenewalStr = toLocalDateString(nextRenewal);
+        const days        = getDaysUntilRenewal(nextRenewalStr);
+        const statusColor = getStatusColor(days);
+        const badgeColor  = getBadgeColor(days);
+        const daysText    = getDaysText(days);
+
+        const notesHTML = sub.notes
+          ? `<div class="mt-3 pt-3 border-t border-gray-200">
+               <p class="text-sm text-gray-600 whitespace-pre-wrap">
+                 <span class="font-medium">Notes:</span> ${escapeHTML(sub.notes)}
+               </p>
+             </div>`
+          : '';
+
+        return `
+          <div class="border-2 ${statusColor} rounded-lg p-4 hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-2">
+                  <h3 class="text-lg font-semibold text-gray-800">${escapeHTML(sub.company)}</h3>
+                  <span class="${badgeColor} text-white text-xs px-2 py-1 rounded-full shrink-0">${daysText}</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                  <div><span class="font-medium">Price:</span> $${sub.price.toFixed(2)}</div>
+                  <div><span class="font-medium">Next Renewal:</span> ${formatDate(nextRenewalStr)}</div>
+                  <div><span class="font-medium">Frequency:</span> ${escapeHTML(sub.frequency || 'Monthly')}</div>
+                  <div><span class="font-medium">Payment:</span> ${escapeHTML(sub.paymentMethod || 'N/A')}</div>
+                </div>
+                ${notesHTML}
+              </div>
+              <div class="flex gap-2 ml-4 shrink-0">
+                <button onclick="showEditModal(${index})" class="text-blue-600 hover:text-blue-800 p-2" title="Edit">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  </svg>
+                </button>
+                <button onclick="deleteSubscription(${index})" class="text-red-600 hover:text-red-800 p-2" title="Delete">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderSubscriptions() {
+        const container  = document.getElementById('subscriptionsList');
+        const emptyState = document.getElementById('emptyState');
+
+        if (subscriptions.length === 0) {
+          container.innerHTML = '';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+
+        emptyState.classList.add('hidden');
+
+        const sortedIndices = [...subscriptions.keys()].sort(
+          (a, b) => getNextRenewalDate(subscriptions[a]) - getNextRenewalDate(subscriptions[b])
+        );
+
+        container.innerHTML = sortedIndices
+          .map(i => createSubscriptionCard(subscriptions[i], i))
+          .join('');
+      }
+
+      function updateTotalCost() {
+        const total = subscriptions.reduce((sum, sub) => sum + toMonthlyPrice(sub), 0);
+        document.getElementById('totalCost').textContent = `$${total.toFixed(2)}`;
+
+        // Days until next annual renewal
+        const upcomingAnnualDays = subscriptions
+          .filter(sub => sub.frequency === 'Annual')
+          .map(sub => getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub))))
+          .filter(d => d >= 0)
+          .sort((a, b) => a - b);
+
+        const nextAnnualEl = document.getElementById('nextAnnualDays');
+        if (upcomingAnnualDays.length === 0) {
+          nextAnnualEl.textContent = 'None';
+        } else {
+          nextAnnualEl.textContent = getDaysText(upcomingAnnualDays[0]);
+        }
+
+        // Monthly equivalent already committed from annual subscriptions
+        const annualMonthly = subscriptions
+          .filter(sub => sub.frequency === 'Annual')
+          .reduce((sum, sub) => sum + sub.price / 12, 0);
+        document.getElementById('annualMonthlyPaid').textContent = `$${annualMonthly.toFixed(2)}`;
+
+        // Total cost of monthly-only subscriptions
+        const monthlyOnly = subscriptions
+          .filter(sub => sub.frequency === 'Monthly')
+          .reduce((sum, sub) => sum + sub.price, 0);
+        document.getElementById('monthlyOnlyTotal').textContent = `$${monthlyOnly.toFixed(2)}`;
+      }
+
+      function checkNotifications() {
+        const area         = document.getElementById('notificationArea');
+        const expiringSoon = subscriptions.filter(sub => {
+          const d = getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub)));
+          return d >= 0 && d <= 3;
+        });
+
+        if (expiringSoon.length === 0) {
+          area.innerHTML = '';
+          return;
+        }
+
+        const items = expiringSoon.map(sub => {
+          const d    = getDaysUntilRenewal(toLocalDateString(getNextRenewalDate(sub)));
+          const when = d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`;
+          return `<li><strong>${escapeHTML(sub.company)}</strong> renews ${when}!</li>`;
+        }).join('');
+
+        area.innerHTML = `
+          <div class="notification-badge bg-orange-100 border-l-4 border-orange-500 rounded-lg p-4">
+            <div class="flex items-start">
+              <svg class="w-6 h-6 text-orange-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+              <div>
+                <h4 class="font-bold text-orange-800 mb-1">Upcoming Renewals</h4>
+                <ul class="text-sm text-orange-700 space-y-1">${items}</ul>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // --- CSV ---
+
+      function importCSV() {
+        document.getElementById('csvFileInput').click();
+      }
+
+      function handleCSVUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const lines = e.target.result.split('\n').filter(line => line.trim());
+
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split(',').map(p => p.trim());
+            if (!parts[0] || !parts[1] || !parts[2]) continue;
+
+            let renewalDate = parts[2];
+            if (!renewalDate.includes('-') && !renewalDate.includes('/')) {
+              const date = new Date(`${parts[2]} ${new Date().getFullYear()}`);
+              renewalDate = date.toISOString().split('T')[0];
+            }
+
+            subscriptions.push({
+              id:            crypto.randomUUID(),
+              company:       parts[0],
+              price:         parseFloat(parts[1]),
+              renewalDate,
+              frequency:     parts[3] || 'Monthly',
+              paymentMethod: parts[4] || '',
+              notes:         parts[5] || '',
+            });
+          }
+
+          saveToLocalStorage();
+          renderSubscriptions();
+          updateTotalCost();
+          checkNotifications();
+          pushToSheets();
+          alert('CSV imported successfully!');
+        };
+        reader.readAsText(file);
+      }
+
+      function exportCSV() {
+        if (subscriptions.length === 0) {
+          alert('No subscriptions to export!');
+          return;
+        }
+
+        const header = 'Company,Price,Renewal Date,Frequency,Payment Method,Notes\n';
+        const rows   = subscriptions.map(sub =>
+          [
+            sub.company,
+            sub.price,
+            sub.renewalDate,
+            sub.frequency     || 'Monthly',
+            sub.paymentMethod || '',
+            (sub.notes || '').replace(/,/g, ';'),  // avoid breaking CSV with commas in notes
+          ].join(',')
+        ).join('\n');
+
+        downloadFile(header + rows, 'subscriptions.csv', 'text/csv');
+      }
+
+      // --- iCal ---
+
+      function formatDateForICal(date) {
+        const pad = n => String(n).padStart(2, '0');
+        return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+               `T${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}Z`;
+      }
+
+      function buildICalEvent(sub) {
+        const uid   = `${sub.id}@subscriptiontracker.com`;
+        const start = formatDateForICal(new Date(sub.renewalDate));
+        const stamp = formatDateForICal(new Date());
+
+        const rruleMap = {
+          Monthly:   'RRULE:FREQ=MONTHLY;COUNT=24',
+          Annual:    'RRULE:FREQ=YEARLY;COUNT=5',
+          Quarterly: 'RRULE:FREQ=MONTHLY;INTERVAL=3;COUNT=16',
+        };
+
+        let desc = `Subscription: ${sub.company}\\nAmount: $${sub.price}\\nFrequency: ${sub.frequency}\\n`;
+        if (sub.paymentMethod) desc += `Payment Method: ${sub.paymentMethod}\\n`;
+        if (sub.notes)         desc += `Notes: ${sub.notes.replace(/\n/g, '\\n')}\\n`;
+        desc += `\\nRemember to review or cancel before renewal!`;
+
+        const lines = [
+          'BEGIN:VEVENT',
+          `UID:${uid}`,
+          `DTSTAMP:${stamp}`,
+          `DTSTART;VALUE=DATE:${start}`,
+          `SUMMARY:💳 ${sub.company} Subscription Renewal ($${sub.price})`,
+          `DESCRIPTION:${desc}`,
+          'STATUS:CONFIRMED',
+          'TRANSP:TRANSPARENT',
+        ];
+
+        if (rruleMap[sub.frequency]) lines.push(rruleMap[sub.frequency]);
+        lines.push('END:VEVENT');
+        return lines.join('\n');
+      }
+
+      function exportToGoogleCalendar() {
+        if (subscriptions.length === 0) {
+          alert('No subscriptions to export!');
+          return;
+        }
+
+        const events = subscriptions.map(sub => buildICalEvent(sub)).join('\n');
+        const ics = [
+          'BEGIN:VCALENDAR',
+          'VERSION:2.0',
+          'PRODID:-//Subscription Tracker//EN',
+          'CALSCALE:GREGORIAN',
+          'METHOD:PUBLISH',
+          'X-WR-CALNAME:Subscription Renewals',
+          'X-WR-TIMEZONE:UTC',
+          events,
+          'END:VCALENDAR',
+        ].join('\n');
+
+        downloadFile(ics, 'subscription-renewals.ics', 'text/calendar;charset=utf-8');
+
+        setTimeout(() => {
+          alert(
+            'Calendar file downloaded!\n\nNext steps:\n1. Open the downloaded .ics file\n2. It will open in your calendar app (Google Calendar, Outlook, Apple Calendar)\n3. Click "Add to Calendar" or "Import"\n4. Your subscriptions will appear as recurring events on their renewal dates\n5. Set your own reminders directly in your calendar app\n\nNote: If importing to Google Calendar via web, go to Settings > Import & Export > Import'
+          );
+        }, 500);
+      }
+
+      // --- File download helper ---
+
+      function downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url  = window.URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+
+      init();
+    </script>
+  </body>
+</html>
